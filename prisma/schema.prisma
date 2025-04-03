@@ -1,0 +1,129 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum Role {
+  admin
+  client
+}
+
+model User {
+  id            Int           @id @default(autoincrement())
+  email         String        @unique
+  passwordHash  String
+  role          Role
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now())
+  
+  // Relations
+  forms         Form[]        @relation("CreatedForms")
+  responses     FormResponse[]
+  fileUploads   FileUpload[]
+
+  @@map("users")
+}
+
+model Form {
+  id          Int           @id @default(autoincrement())
+  admin       User          @relation("CreatedForms", fields: [adminId], references: [id])
+  adminId     Int
+  title       String
+  description String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @default(now())
+  
+  // Relations
+  fields      FormField[]
+  responses   FormResponse[]
+  uniqueLinks UniqueLink[]
+
+  @@map("forms")
+}
+
+model FormField {
+  id               Int      @id @default(autoincrement())
+  form             Form     @relation(fields: [formId], references: [id])
+  formId           Int
+  fieldType        String   // e.g., 'text', 'radio', 'checkbox', 'file', etc.
+  label            String
+  placeholder      String?
+  options          Json?    // For selection fields (e.g., radio, checkbox)
+  isRequired       Boolean  @default(false)
+  orderIndex       Int      @default(0)
+  conditionalLogic Json?    // JSON to define conditions (e.g., dependencies)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+  
+  // Relations
+  answers          FormResponseAnswer[]
+
+  @@map("form_fields")
+}
+
+model UniqueLink {
+  id         Int       @id @default(autoincrement())
+  form       Form      @relation(fields: [formId], references: [id])
+  formId     Int
+  token      String    @unique
+  expiresAt  DateTime?
+  used       Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@map("unique_links")
+}
+
+model FormResponse {
+  id          Int       @id @default(autoincrement())
+  form        Form      @relation(fields: [formId], references: [id])
+  formId      Int
+  user        User?     @relation(fields: [userId], references: [id])
+  userId      Int?
+  submittedAt DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  
+  // Relations
+  answers     FormResponseAnswer[]
+
+  @@map("form_responses")
+}
+
+model FormResponseAnswer {
+  id          Int       @id @default(autoincrement())
+  response    FormResponse @relation(fields: [responseId], references: [id])
+  responseId  Int
+  field       FormField  @relation(fields: [fieldId], references: [id])
+  fieldId     Int
+  answer      String?
+  createdAt   DateTime   @default(now())
+  
+  // Relations
+  fileUploads FileUpload[]
+
+  @@map("form_response_answers")
+}
+
+model FileUpload {
+  id                     Int       @id @default(autoincrement())
+  user                   User?     @relation(fields: [userId], references: [id])
+  userId                 Int?
+  formResponseAnswer     FormResponseAnswer? @relation(fields: [formResponseAnswerId], references: [id])
+  formResponseAnswerId   Int?
+  fileName               String
+  fileUrl                String    // S3 or similar URL
+  fileSize               BigInt?
+  mimeType               String?
+  uploadedAt             DateTime  @default(now())
+
+  @@map("file_uploads")
+}
